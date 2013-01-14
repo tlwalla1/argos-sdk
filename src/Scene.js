@@ -40,6 +40,7 @@ define('argos/Scene', [
     'dojo/_base/json',
     'dojo/_base/window',
     'dojo/topic',
+    'dojo/dom-geometry',
     './_Component',
     './Layout',
     './View'
@@ -51,6 +52,7 @@ define('argos/Scene', [
     json,
     win,
     topic,
+    domGeom,
     _Component,
     Layout,
     View
@@ -105,7 +107,7 @@ define('argos/Scene', [
             {type: Layout, attachPoint: 'layout'}
         ],
         layout: null,
-
+        supportedTiers: 2,
         constructor: function(options) {
             this._registeredViews = {};
             this._instancedViews = {};
@@ -192,6 +194,7 @@ define('argos/Scene', [
             this._signals.push(topic.subscribe('/app/scene/back', lang.hitch(this, this.back)));
 
             this.layout.placeAt(win.body());
+            this.supportedTiers = this.layout.tiers;
 
             this._initialState = this._getSavedState();
 
@@ -500,6 +503,14 @@ define('argos/Scene', [
                 location.tier = this.layout.maximized;
             }
 
+            // Detect screen width here
+            var contentBox = domGeom.getContentBox(this.layout.domNode);
+            if (location.tier > 0 && contentBox && contentBox.w < 1024) {
+                this.updateSupportedTiers(1);
+            } else {
+                this.updateSupportedTiers(2);
+            }
+
             /* todo: is `activate` the right name for this? */
             view.activate(options); /* activation required in order to build context (i.e. hash, etc.) */
 
@@ -538,6 +549,15 @@ define('argos/Scene', [
             );
 
             return deferred;
+        },
+        updateSupportedTiers: function(tiers) {
+            if (this.supportedTiers === tiers) {
+                return;
+            }
+
+            this.supportedTiers = tiers;
+            // TODO: Notify the layout tiers has changed? Maybe via a setter?
+            this.layout.tiers = tiers;
         },
         _onLayoutShowComplete: function() {
             this._processQueue();
