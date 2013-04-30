@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-define('Sage/Platform/Mobile/_Templated',
+define('argos/_Templated',
     [
         'dojo/dom-construct',
         'dojo/_base/declare',
@@ -31,7 +31,7 @@ function(domConstruct, declare, query, parser, array, lang, registry, wai) {
      *
      * @alternateClassName _Templated
      */
-    var templated = declare('Sage.Platform.Mobile._Templated', null, {
+    var templated = declare('argos._Templated', null, {
         /*
          * Not inheriting from dijit._Templated, but using similar functionality.
          * this is required for contentTemplate to work property.
