@@ -301,7 +301,6 @@ define('argos/Application', [
          * @param o XHR object with namely the `result` property
          */
         _loadSDataRequest: function(request, o) {
-            /// <param name="request" type="Sage.SData.Client.SDataBaseRequest" />
             // todo: find a better way of indicating that a request can prefer cache
             if (window.localStorage)
             {
@@ -600,3 +599,4 @@ define('argos/Application', [
         }
     });
 });
+

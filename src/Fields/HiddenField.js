@@ -48,6 +48,7 @@ define('argos/Fields/HiddenField', [
             '<div style="display: none;" data-field="{%= $.name || $.property %}" data-field-type="{%= $.type %}">',
             '</div>'
         ]),
+
         /**
          * @property {Simplate}
          * Simplate that defines the fields HTML Markup

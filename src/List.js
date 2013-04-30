@@ -106,7 +106,7 @@ define('argos/List', [
          */
         constructor: function(options) {
             this.selections = {};
-            
+
             lang.mixin(this, options);
         },
         /**
@@ -736,26 +736,24 @@ define('argos/List', [
             var selectedItems = this.get('selectionModel').getSelections(),
                 selection = null;
 
-            for (var key in selectedItems)
-            {
+            for (var key in selectedItems) {
                 selection = selectedItems[key];
                 break;
             }
 
-            for (var i = 0; i < this.actions.length; i++)
-            {
+            for (var i = 0; i < this.actions.length; i++) {
                 var action = this.actions[i];
 
                 action.isEnabled = (typeof action['enabled'] === 'undefined')
                     ? true
                     : this.expandExpression(action['enabled'], action, selection);
 
-                if (!action.hasAccess)
+                if (!action.hasAccess) {
                     action.isEnabled = false;
+                }
 
                 domClass.toggle(this.actionsNode.childNodes[i], 'toolButton-disabled', !action.isEnabled);
             }
-
         },
         /**
          * Handler for showing the list-action panel/bar - it needs to do several things:
@@ -1186,9 +1184,6 @@ define('argos/List', [
          * Invokes the `this.options.singleSelectAction` tool.
          */
         emptySelection: function() {
-            /// <summary>
-            ///     Called when the emptySelection/None button is clicked.
-            /// </summary>
             this._selectionModel.clear();
 
             topic.publish('/app/toolbar/invoke', this.options.singleSelectAction);
@@ -1311,3 +1306,4 @@ define('argos/List', [
         }
     });
 });
+

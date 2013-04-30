@@ -58,6 +58,7 @@ define('argos/Fields/EditorField', [
                 attribute: 'value'
             }
         },
+
         /**
          * @property {Simplate}
          * Simplate that defines the fields HTML Markup

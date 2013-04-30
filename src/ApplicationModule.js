@@ -115,3 +115,4 @@ define('argos/ApplicationModule', [
         }
     });
 });
+

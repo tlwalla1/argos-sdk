@@ -141,7 +141,7 @@ define('argos/Edit', [
          * * `$$` => the view instance
          */
         rowTemplate: new Simplate([
-            '<div class="row row-edit {%= $.containerClass || $.cls %}" data-field="{%= $.name || $.property %}" data-field-type="{%= $.type %}">',
+            '<div class="row row-edit {%= $.containerClass || $.cls %}{% if ($.readonly) { %}row-readonly{% } %}" data-field="{%= $.name || $.property %}" data-field-type="{%= $.type %}">',
             '<label for="{%= $.name %}">{%: $.label %}</label>',
             '</div>'
         ]),
@@ -833,6 +833,11 @@ define('argos/Edit', [
                 scene().back();
             }
         },
+        /**
+         * Handler when an error occurs while request data from the SData endpoint.
+         * @param {Object} response The response object.
+         * @param {Object} o The options that were passed when creating the Ajax request.
+         */
         onRequestFailure: function(response, o) {
             alert(string.substitute(this.requestErrorText, [response, o]));
 
@@ -1107,3 +1112,4 @@ define('argos/Edit', [
         }
     });
 });
+

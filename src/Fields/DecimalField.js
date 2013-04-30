@@ -38,11 +38,13 @@ define('argos/Fields/DecimalField', [
     'dojo/_base/event',
     'dojo/string',
     './TextField'
+    '../utility'
 ], function(
     declare,
     event,
     string,
-    TextField
+    TextField,
+    Utility
 ) {
     return declare('argos.Fields.DecimalField', [TextField], {
         /**
@@ -88,16 +90,27 @@ define('argos/Fields/DecimalField', [
          * @param {Number/String} val Value to be set
          */
         setValue: function(val, initial) {
-            if (isNaN(parseFloat(val)))
-                val = 0;
+            var perc;
 
-            var precision = (isNaN(this.precision) || this.precision < 0)
-                ? Mobile.CultureInfo.numberFormat.currencyDecimalDigits
-                : this.precision;
-            val = parseFloat(val).toFixed(precision);
-
-            val = val.replace('.', Mobile.CultureInfo.numberFormat.currencyDecimalSeparator);
-
+            perc = this.getPrecision();            
+            val = Utility.roundNumberTo(parseFloat(val), perc);
+            val = val.toFixed(perc);
+            if(isNaN(val)){
+                if (perc === 0) {
+                    val = "0";
+                } else {
+                    val = string.substitute('0${0}00', [Mobile.CultureInfo.numberFormat.currencyDecimalSeparator || '.']);
+                }                
+            }else{
+                if (perc !== 0) {
+                    val = string.substitute('${0}${1}${2}',
+                        [
+                            parseInt(val, 10),
+                            Mobile.CultureInfo.numberFormat.currencyDecimalSeparator || '.',
+                            val.substr(-perc)
+                        ]);
+                }
+            }
             this.inherited(arguments, [val, initial]);
         },
         /**
@@ -140,6 +153,20 @@ define('argos/Fields/DecimalField', [
                 .replace(Mobile.CultureInfo.numberFormat.currencyDecimalSeparator, '.')
                 .replace(Mobile.CultureInfo.numberFormat.numberDecimalSeparator, '.');
             return parseFloat(value);
+        },
+        /**
+         * Retrieves the precision the value will be formated and ronded to.
+         * @return {Number}
+         */
+        getPrecision: function() {
+            var perc;
+            if (this.precision === 0) {
+                perc = this.precision
+            } else {
+                perc = this.precision || Mobile.CultureInfo.numberFormat.currencyDecimalDigits;
+            }
+            return perc;
         }
     });
 });
+

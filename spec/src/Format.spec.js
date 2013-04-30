@@ -114,25 +114,95 @@ return describe('argos.format', function() {
         expect(format.fixed(testStr, '6')).toEqual(1.99);
     });
 
+    it('Can present as percent - single digit with default places of 2', function() {
+        var testStr = .01;
+        expect(format.percent(testStr)).toEqual('1.00%');
+    });
+    it('Can present as percent - single digit with places set to 2', function() {
+        var testStr = .01;
+        var places = 2;
+        expect(format.percent(testStr, places)).toEqual('1.00%');
+    });
+    it('Can present as percent - single digit with places set to 3', function() {
+        var testStr = .01;
+        var places = 3;
+        expect(format.percent(testStr, places)).toEqual('1.000%');
+    });
+    it('Can present as percent - single digit with places set to 3 and no rounding', function() {
+        var testStr = .01015;
+        var places = 3;
+        expect(format.percent(testStr, places)).toEqual('1.015%');
+    });
+    it('Can present as percent - single digit with places set to 3 and rounding up', function() {
+        var testStr = .010155;
+        var places = 3;
+        expect(format.percent(testStr, places)).toEqual('1.016%');
+    });
+    it('Can present as percent - single digit with places set to 3 and rounding down', function() {
+        var testStr = .010154;
+        var places = 3;
+        expect(format.percent(testStr, places)).toEqual('1.015%');
+    });
+    it('Can present as percent - single digit with places set to 0 and rounding up', function() {
+        var testStr = .01561;
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('2%');
+    });
+    it('Can present as percent - single digit with places set to 0 and rounding down', function() {
+        var testStr = .01455;
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('1%');
+    });
     it('Can present as percent - single digit', function() {
         var testStr = .01;
-        expect(format.percent(testStr)).toEqual('1%');
-    });
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('1%');
+    });   
     it('Can present as percent - double digit', function() {
         var testStr = .25;
-        expect(format.percent(testStr)).toEqual('25%');
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('25%');
     });
     it('Can present as percent - triple digit', function() {
         var testStr = 2;
-        expect(format.percent(testStr)).toEqual('200%');
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('200%');
     });
     it('Can present as percent - quad digit', function() {
         var testStr = 10;
-        expect(format.percent(testStr)).toEqual('1000%');
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('1,000%');
+    });
+    it('Can present as percent - quad digit with places set to 2 no round', function() {
+        var testStr = 19.9999;
+        var places = 2;
+        expect(format.percent(testStr, places)).toEqual('1,999.99%');
+    });
+    it('Can present as percent - quad digit with places set to 2 round up', function() {
+        var testStr = 19.99995;
+        var places = 2;
+        expect(format.percent(testStr, places)).toEqual('2,000.00%');
+    });
+    it('Can present as percent - quad digit with places set to 2 round down', function() {
+        var testStr = 19.99994;
+        var places = 2;
+        expect(format.percent(testStr, places)).toEqual('1,999.99%');
+    });
+    it('Can present as percent - rounded up', function() {
+        var testStr = .155; 
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('16%');
     });
     it('Can present as percent - rounded down', function() {
-        var testStr = .155; // some might expect 16%, but should round down
-        expect(format.percent(testStr)).toEqual('15%');
+        var testStr = .154;
+        var places = 0;
+        expect(format.percent(testStr, places)).toEqual('15%');
+    });
+    it('Can present as percent - change location of percent symbol', function() {
+        var testStr = .10; 
+        var places = 0;
+        format.percentFormatText = '${1}${0}';
+        expect(format.percent(testStr, places)).toEqual('%10');
     });
 
     it('Can present true string to default yes string (Yes)', function() {
@@ -205,5 +275,40 @@ return describe('argos.format', function() {
         var testStr = 'test';
         expect(format.timespan(testStr)).toEqual('');
     });
+
+    it('Can format A-Z to their phone number equivalents', function() {
+        var testStr = 'ABCDEFHGIJKLMNOPQRSTUVWXYZ';
+        expect(format.alphaToPhoneNumeric(testStr)).toEqual('22233344455566677778889999');
+    });
+    it('Can format a-z (except x) to their phone number equivalents', function() {
+        var testStr = 'abcdefghijklmnopqrstuvwxyz';
+        expect(format.alphaToPhoneNumeric(testStr)).toEqual('22233344455566677778889x99');
+    });
+
+    it('Can format a 7 digit phone number to be nnn-nnnn', function() {
+        var testStr = '1234567';
+        expect(format.phone(testStr)).toEqual('123-4567');
+    });
+    it('Can format a 10 digit phone number to be (nnn)-nnn-nnnn', function() {
+        var testStr = '1234567890';
+        expect(format.phone(testStr)).toEqual('(123)-456-7890');
+    });
+    it('Can format a 10 digit phone number with extension to be (nnn)-nnn-nnnnxnnn', function() {
+        var testStr = '1234567890x123';
+        expect(format.phone(testStr)).toEqual('(123)-456-7890x123');
+    });
+    it('Can call alphaToPhoneNumeric when formatting a phone number', function() {
+        spyOn(format, 'alphaToPhoneNumeric').andReturn('test');
+
+        format.phone('test');
+
+        expect(format.alphaToPhoneNumeric).toHaveBeenCalled();
+    });
+    it('Can format a phone number with mixed numbers and alphas', function() {
+        var testStr = '1-800-CALL-JEFF';
+        expect(format.phone(testStr)).toEqual('180022555333');
+    });
+
+
 });
 });
