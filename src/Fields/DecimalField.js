@@ -37,7 +37,7 @@ define('argos/Fields/DecimalField', [
     'dojo/_base/declare',
     'dojo/_base/event',
     'dojo/string',
-    './TextField'
+    './TextField',
     '../utility'
 ], function(
     declare,
