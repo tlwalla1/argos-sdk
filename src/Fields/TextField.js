@@ -315,6 +315,17 @@ define('argos/Fields/TextField', [
         },
 
         /**
+         * Sets the value of the input node, and set the value as the previous value  so notification trigger will not trigger and
+         * if setting an initial value - set the originalValue to the passed value for dirty detection.
+         * @param {String} val Value to be set
+         * @param {Boolean} initial True if the value is the default/clean value, false if it is a meant as a dirty value
+         */
+        setValueNoTrigger: function(val, initial) {
+            this.setValue(val, initial);
+            this.previousValue = this.getValue();
+        },
+
+        /**
          * Clears the input nodes value, optionally clearing as a modified value.
          * @param {Boolean} asDirty If true it signifies the clearing is meant as destroying an
          * existing value and should then be detected as modified/dirty.
