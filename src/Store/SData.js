@@ -93,33 +93,36 @@ define('Sage/Platform/Mobile/Store/SData', [
         },
         _createEntryRequest: function(id, getOptions) {
             var request = utility.expand(this, getOptions.request || this.request);
-            if (request)
-            {
+            if (request) {
                 request = request.clone();
-            }
-            else
-            {
+            } else {
                 id = id || utility.expand(this.scope || this, getOptions.resourcePredicate || this.resourcePredicate);
 
                 var contractName = utility.expand(this.scope || this, getOptions.contractName || this.contractName),
                     resourceKind = utility.expand(this.scope || this, getOptions.resourceKind || this.resourceKind),
                     resourceProperty = utility.expand(this.scope || this, getOptions.resourceProperty || this.resourceProperty),
-                    resourcePredicate = /\s+/.test(id) ? id : string.substitute("'${0}'", [id]);
+                    resourcePredicate;
 
-                if (resourceProperty)
-                {
+                if (id) {
+                    resourcePredicate = /\s+/.test(id) ? id : string.substitute("'${0}'", [id])
+                }
+
+                if (resourceProperty) {
                     request = new Sage.SData.Client.SDataResourcePropertyRequest(this.service)
                         .setResourceProperty(resourceProperty)
                         .setResourceSelector(resourcePredicate);
-                }
-                else
-                {
+                } else {
                     request = new Sage.SData.Client.SDataSingleResourceRequest(this.service)
                         .setResourceSelector(resourcePredicate);
                 }
 
-                if (contractName) request.setContractName(contractName);
-                if (resourceKind) request.setResourceKind(resourceKind);
+                if (contractName) {
+                    request.setContractName(contractName);
+                }
+
+                if (resourceKind) {
+                    request.setResourceKind(resourceKind);
+                }
             }
 
             var select = utility.expand(this.scope || this, getOptions.select || this.select),
@@ -423,23 +426,31 @@ define('Sage/Platform/Mobile/Store/SData', [
 
             var handle = {},
                 queryDeferred = new Deferred(lang.hitch(this, this._onCancel, handle)),
-                request = this._createFeedRequest(query, queryOptions || {});
+                request = this._createFeedRequest(query, queryOptions || {}),
+                method,
+                options;
 
             queryDeferred.total = -1;
-
-            var method = this.executeQueryAs
-                ? request[this.executeQueryAs]
-                : request instanceof Sage.SData.Client.SDataResourcePropertyRequest
-                    ? request.readFeed
-                    : request.read;
-
-            handle.value = method.call(request, {
+            options = {
                 success: lang.hitch(this, this._onRequestFeedSuccess, queryDeferred),
                 failure: lang.hitch(this, this._onRequestFailure, queryDeferred),
                 abort: lang.hitch(this, this._onRequestAbort, queryDeferred),
                 httpMethodOverride: queryOptions && queryOptions['httpMethodOverride']
-            });
+            };
 
+            if (this.executeQueryAs) {
+                method = request[this.executeQueryAs];
+            } else if (request instanceof Sage.SData.Client.SDataResourcePropertyRequest) {
+                method = request.readFeed;
+            } else if (request instanceof Sage.SData.Client.SDataServiceOperationRequest) {
+                method = request.execute;
+                handle.value = method.call(request, this.entry, options);
+                return QueryResults(queryDeferred);
+            } else {
+                method = request.read;
+            }
+
+            handle.value = method.call(request, options);
             return QueryResults(queryDeferred);
         },
         transaction: function() {

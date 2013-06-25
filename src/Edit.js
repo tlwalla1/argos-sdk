@@ -49,6 +49,7 @@ define('Sage/Platform/Mobile/Edit', [
     'dojo/_base/lang',
     'dojo/_base/connect',
     'dojo/_base/array',
+    'dojo/_base/Deferred',
     'dojo/string',
     'dojo/dom',
     'dojo/dom-attr',
@@ -79,6 +80,7 @@ define('Sage/Platform/Mobile/Edit', [
     lang,
     connect,
     array,
+    Deferred,
     string,
     dom,
     domAttr,
@@ -212,6 +214,7 @@ define('Sage/Platform/Mobile/Edit', [
          * The unique identifier of the view
          */
         id: 'generic_edit',
+        store: null,
         /**
          * @property {Object}
          * The layout definition that constructs the detail view with sections and rows
@@ -290,6 +293,11 @@ define('Sage/Platform/Mobile/Edit', [
         entry: null,
         /**
          * @property {Object}
+         * The saved SData response.
+         */
+        item: null,
+        /**
+         * @property {Object}
          * The saved template SData response.
          */
         templateEntry: null,
@@ -358,6 +366,9 @@ define('Sage/Platform/Mobile/Edit', [
                     scope: ReUI
                 }]
             });
+        },
+        _getStoreAttr: function() {
+            return this.store || (this.store = this.createStore());
         },
         /**
          * Handler for a fields on show event.
@@ -441,6 +452,60 @@ define('Sage/Platform/Mobile/Edit', [
             var node = dom.byId(params.$source);
             if (node)
                 domClass.toggle(node, 'collapsed');
+        },
+        createStore: function() {
+            return null;
+        },
+        onContentChange: function() {
+        },
+        _processItem: function(item) {
+            return item;
+        },
+        _processData: function(item) {
+            this.item = this._processItem(item);
+
+            this.setValues(item, true);
+
+            // Re-apply any passed changes as they may have been overwritten
+            if (this.options.changes)
+            {
+                this.changes = this.options.changes;
+                this.setValues(this.changes);
+            }
+        },
+        _onGetComplete: function(item) {
+            if (item) {
+                this._processData(item);
+            } else {
+                /* todo: show error message? */
+            }
+
+            domClass.remove(this.domNode, 'panel-loading');
+
+            /* this must take place when the content is visible */
+            this.onContentChange();
+        },
+        _onGetError: function(getOptions, error) {
+            if (error.aborted)
+            {
+                /* todo: show error message? */
+            }
+            else if (error.status == 404)
+            {
+                /* todo: show error message */
+            }
+            else
+            {
+                alert(string.substitute(this.requestErrorText, [error]));
+            }
+
+            var errorItem = {
+                viewOptions: this.options,
+                serverError: error
+            };
+            ErrorManager.addError(this.requestErrorText, errorItem);
+
+            domClass.remove(this.domNode, 'panel-loading');
         },
         /**
          * Creates Sage.SData.Client.SDataSingleResourceRequest instance and sets a number of known properties.
@@ -610,13 +675,33 @@ define('Sage/Platform/Mobile/Edit', [
          * Initiates the SData request.
          */
         requestData: function() {
-            var request = this.createRequest();
-            if (request)
-                request.read({
-                    success: this.onRequestDataSuccess,
-                    failure: this.onRequestDataFailure,
-                    scope: this
-                });
+            var request, store, getOptions, getExpression, getResults;
+            store = this.get('store');
+
+            if (store) {
+                getOptions = {};
+
+                this._applyStateToGetOptions(getOptions);
+
+                getExpression = this._buildGetExpression() || null;
+                getResults = store.get(getExpression, getOptions);
+
+                Deferred.when(getResults,
+                    lang.hitch(this, this._onGetComplete),
+                    lang.hitch(this, this._onGetError, getOptions)
+                );
+
+                return getResults;
+            } else {
+                request = this.createRequest();
+                if (request) {
+                    request.read({
+                        success: this.onRequestDataSuccess,
+                        failure: this.onRequestDataFailure,
+                        scope: this
+                    });
+                }
+            }
         },
         /**
          * Handler when an error occurs while request data from the SData endpoint.
@@ -958,25 +1043,60 @@ define('Sage/Platform/Mobile/Edit', [
          * calls `create`.
          */
         insert: function() {
+            var values, store, addOptions, item, request, entry;
             this.disable();
 
             var values = this.getValues();
-            if (values)
-            {
-                var entry = this.createEntryForInsert(values);
+            if (values) {
+                store = this.get('store');
+                if (store) {
+                    addOptions = {
+                            overwrite: false
+                    };
+                    item = this.createItemForInsert(values);
 
-                var request = this.createRequest();
-                if (request)
-                    request.create(entry, {
-                        success: this.onInsertSuccess,
-                        failure: this.onInsertFailure,
-                        scope: this
-                    });
-            }
-            else
-            {
+                    this._applyStateToAddOptions(addOptions);
+
+                    Deferred.when(store.add(item, addOptions),
+                        lang.hitch(this, this._onAddComplete, item),
+                        lang.hitch(this, this._onAddError, addOptions)
+                    );
+                } else { 
+                    entry = this.createEntryForInsert(values);
+                    request = this.createRequest();
+
+                    if (request) {
+                        request.create(entry, {
+                            success: this.onInsertSuccess,
+                            failure: this.onInsertFailure,
+                            scope: this
+                        });
+                    }
+                }
+            } else {
                 ReUI.back();
             }
+        },
+        _applyStateToAddOptions: function(addOptions) {
+        },
+        _onAddComplete: function(item, result) {
+            this.enable();
+
+            var message = this._buildRefreshMessage(item, result);
+            connect.publish('/app/refresh', [message]);
+
+            this.onInsertCompleted(result);
+        },
+        _onAddError: function(addOptions, error) {
+            alert(string.substitute(this.requestErrorText, [error]));
+
+            var errorItem = {
+                viewOptions: this.options,
+                serverError: error
+            };
+
+            ErrorManager.addError(this.requestErrorText, errorItem);
+            this.enable();
         },
         /**
          * Handler for when insert() is successfull, publishes the global `/app/refresh` event which
@@ -1039,24 +1159,100 @@ define('Sage/Platform/Mobile/Edit', [
          * calls `update`.
          */
         update: function() {
-            var values = this.getValues();
-            if (values)
-            {
+            var values, store, putOptions, item, entry, request;
+            values = this.getValues();
+            if (values) {
                 this.disable();
 
-                var entry = this.createEntryForUpdate(values);
+                store = this.get('store');
+                if (store) {
+                    putOptions = {
+                            overwrite: true,
+                            id: store.getIdentity(this.item)
+                    };
+                    item = this.createItemForUpdate(values);
 
-                var request = this.createRequest();
-                if (request)
-                    request.update(entry, {
-                        success: this.onUpdateSuccess,
-                        failure: this.onUpdateFailure,
-                        scope: this
-                    });
-            }
-            else
-            {
+                    this._applyStateToPutOptions(putOptions);
+
+                    Deferred.when(store.put(item, putOptions),
+                        lang.hitch(this, this._onPutComplete, item),
+                        lang.hitch(this, this._onPutError, putOptions)
+                    );
+                } else {
+                    entry = this.createEntryForUpdate(values);
+                    request = this.createRequest();
+                    if (request) {
+                        request.update(entry, {
+                            success: this.onUpdateSuccess,
+                            failure: this.onUpdateFailure,
+                            scope: this
+                        });
+                    }
+                }
+            } else {
                 this.onUpdateCompleted(false);
+            }
+        },
+        /**
+         * Gathers the values for the entry to send back and returns the appropriate payload for
+         * creating or updating.
+         * @return {Object} Entry/payload
+         */
+        createItem: function() {
+            var values = this.getValues();
+
+            return this.inserting
+                ? this.createItemForUpdate(values)
+                : this.createItemForInsert(values);
+        },
+        /**
+         * Takes the values object and adds the needed propertiers for updating.
+         * @param {Object} values
+         * @return {Object} Object with properties for updating
+         */
+        createItemForUpdate: function(values) {
+            return values;
+        },
+        /**
+         * Takes the values object and adds the needed propertiers for creating/inserting.
+         * @param {Object} values
+         * @return {Object} Object with properties for inserting
+         */
+        createItemForInsert: function(values) {
+            return values;
+        },
+        _applyStateToPutOptions: function(putOptions) {
+        },
+        _onPutComplete: function(item, result) {
+            this.enable();
+
+            var message = this._buildRefreshMessage(item, result);
+
+            connect.publish('/app/refresh', [message]);
+
+            this.onUpdateCompleted(item);
+        },
+        _onPutError: function(putOptions, error) {
+            alert(string.substitute(this.requestErrorText, [error]));
+
+            var errorItem = {
+                viewOptions: this.options,
+                serverError: error
+            };
+            ErrorManager.addError(this.requestErrorText, errorItem);
+
+            this.enable();
+        },
+        _buildRefreshMessage: function(item, result) {
+            if (item)
+            {
+                var store = this.get('store'),
+                    id = store.getIdentity(item);
+                return {
+                    id: id,
+                    key: id,
+                    data: result
+                };
             }
         },
         /**
@@ -1226,6 +1422,7 @@ define('Sage/Platform/Mobile/Edit', [
          */
         refresh: function() {
             this.entry = false;
+            this.item = false;
             this.changes = false;
             this.inserting = (this.options.insert === true);
 
@@ -1243,19 +1440,19 @@ define('Sage/Platform/Mobile/Edit', [
             else
             {
                 // apply entry as non-modified data
-                if (this.options.entry)
-                {
-                    this.processEntry(this.options.entry);
+                if (this.options.entry || this.options.item) {
+                    if (this.options.entry) {
+                        this.processEntry(this.options.entry);
+                    } else {
+                        this._processData(this.options.item);
+                    }
 
                     // apply changes as modified data, since we want this to feed-back through
-                    if (this.options.changes)
-                    {
+                    if (this.options.changes) {
                         this.changes = this.options.changes;
                         this.setValues(this.changes);
                     }
-                }
-                else
-                {
+                } else {
                     // if key is passed request that keys entity and process
                     if (this.options.key)
                         this.requestData();

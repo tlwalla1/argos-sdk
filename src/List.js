@@ -26,6 +26,8 @@ define('Sage/Platform/Mobile/List', [
     'dojo/_base/declare',
     'dojo/_base/lang',
     'dojo/_base/array',
+    'dojo/_base/Deferred',
+    'dojo/_base/connect',
     'dojo/query',
     'dojo/dom-attr',
     'dojo/dom-class',
@@ -36,11 +38,14 @@ define('Sage/Platform/Mobile/List', [
     'dojo/window',
     'Sage/Platform/Mobile/ErrorManager',
     'Sage/Platform/Mobile/View',
-    'Sage/Platform/Mobile/SearchWidget'
+    'Sage/Platform/Mobile/SearchWidget',
+    'Sage/Platform/Mobile/ConfigurableSelectionModel'
 ], function(
     declare,
     lang,
     array,
+    Deferred,
+    connect,
     query,
     domAttr,
     domClass,
@@ -51,228 +56,11 @@ define('Sage/Platform/Mobile/List', [
     win,
     ErrorManager,
     View,
-    SearchWidget
+    SearchWidget,
+    ConfigurableSelectionModel
 ) {
-
-    /**
-     * @class Sage.Platform.Mobile.SelectionModel
-     * SelectionModel provides a simple in-memory store for data that fires events
-     * when a item is selected (added) or deselected (removed)
-     * @alternateClassName SelectionModel
-     */
-    var SelectionModel = declare('Sage.Platform.Mobile.SelectionModel', null, {
-        /**
-         * @property {Number}
-         * Number of selections
-         */
-        count: 0,
-        /**
-         * @property {Object}
-         * Collection of selections where the key is the selections key
-         */
-        selections: null,
-        /**
-         * @property {Boolean}
-         * Flag that determines how to clear:
-         *
-         * True: Deselect is called on every item, firing onDeselect for each and firing onClear at the end
-         *
-         * False: Collection is immediately wiped and only onClear is fired
-         *
-         */
-        clearAsDeselect: true,
-        /**
-         * @property {Boolean}
-         * Flag that control the firing of action events: onSelect, onDeselect, onClear
-         */
-        _fireEvents: true,
-        /**
-         * Initializes the selections to be empty and mixes the passed object overriding any default properties.
-         * @param {Object} options The object to be mixed in.
-         */
-        constructor: function(options) {
-            this.selections = {};
-
-            lang.mixin(this, options);
-        },
-        /**
-         * Prevents the firing of action events: onSelect, onDeselect, onClear
-         */
-        suspendEvents: function() {
-            this._fireEvents = false;
-        },
-        /**
-         * Enables the firing of action events:  onSelect, onDeselect, onClear
-         */
-        resumeEvents: function() {
-            this._fireEvents = true;
-        },
-        /**
-         * Event that happens when an item is selected/added.
-         * @param {String} key Unique identifier string
-         * @param {Object} data The item stored
-         * @param tag
-         * @param self
-         * @template
-         */
-        onSelect: function(key, data, tag, self) {
-        },
-        /**
-         * Event that happens when an item is deselected/removed.
-         * @param {String} key Unique identifier string
-         * @param {Object} data The item removed
-         * @param tag
-         * @param self
-         * @template
-         */
-        onDeselect: function(key, data, tag, self) {
-        },
-        /**
-         * Event that happens when the store is cleared
-         * @param self
-         */
-        onClear: function(self) {
-        },
-        /**
-         * Adds an item to the `selections` if it is not already stored.
-         * @param {String} key Unique identifier string
-         * @param {Object} data The item being selected
-         * @param tag
-         */
-        select: function(key, data, tag) {
-            if (!this.selections.hasOwnProperty(key))
-            {
-                this.selections[key] = {data: data, tag: tag};
-                this.count++;
-                if (this._fireEvents) this.onSelect(key, data, tag, this);
-            }
-        },
-        /**
-         * Adds an item to the `selections` if it is not already stored, if it is
-         * stored, then it deselects (removes) the item.
-         * @param {String} key Unique identifier string
-         * @param {Object} data The item being selected
-         * @param tag
-         */
-        toggle: function(key, data, tag) {
-            if (this.isSelected(key))
-                this.deselect(key);
-            else
-                this.select(key, data, tag);
-        },
-        /**
-         * Removes an item from the store
-         * @param {String} key Unique identifier string that was given when the item was added
-         */
-        deselect: function(key) {
-            if (this.selections.hasOwnProperty(key))
-            {
-                var selection = this.selections[key];
-
-                delete this.selections[key];
-                this.count--;
-
-                if (this._fireEvents)
-                    this.onDeselect(key, selection.data, selection.tag, this);
-            }
-        },
-        /**
-         * Removes all items from the store
-         */
-        clear: function() {
-            if (this.clearAsDeselect)
-            {
-                for (var key in this.selections) this.deselect(key);
-            }
-            else
-            {
-                this.selections = {};
-                this.count = 0;
-            }
-
-            if (this._fireEvents) this.onClear(this);
-        },
-        /**
-         * Determines if the given key is in the selections collection.
-         * @param {String} key Unique identifier string that was given when the item was added
-         * @return {Boolean} True if the item is in the store.
-         */
-        isSelected: function(key) {
-            return !!this.selections[key];
-        },
-        /**
-         * Returns the number of items in the store
-         * @return {Number} Current count of items
-         */
-        getSelectionCount: function() {
-            return this.count;
-        },
-        /**
-         * Returns all items in the store
-         * @return {Object} The entire selection collection
-         */
-        getSelections: function() {
-            return this.selections;
-        },
-        /**
-         * Returns a list of unique identifier keys used in the selection collection
-         * @return {String[]} All keys in the store
-         */
-        getSelectedKeys: function() {
-            var keys = [];
-            for (var key in this.selections)
-                if (this.selections.hasOwnProperty(key))
-                    keys.push(key);
-            return keys;
-        }
-    });
-
-    /**
-     * @class Sage.Platform.Mobile.ConfigurableSelectionModel
-     * The ConfigurableSelectionModel adds the logic to the SelectionModel to only have one item selected at a time via the `singleSelection` flag.
-     * @alternateClassName ConfigurableSelectionModel
-     * @extends Sage.Platform.Mobile.SelectionModel
-     */
-    var ConfigurableSelectionModel = declare('Sage.Platform.Mobile.ConfigurableSelectionModel', [SelectionModel], {
-        /**
-         * @property {Boolean}
-         * Flag that controls if only one item is selectable at a time. Meaning if this is true
-         * then when a selection is made it first {@link SelectionModel#clear clears} the store.
-         */
-        singleSelection: false,
-        /**
-         * This function is called in Lists {@link List#beforeTransitionTo beforeTransitionTo} and
-         * it is always passed the Lists navigation options `singleSelect`.
-         *
-         * It then sets the flag `singleSelection` to the value if the passed value.
-         *
-         * @param {Boolean} val The state that `singleSelection` should be in.
-         */
-        useSingleSelection: function(val) {
-            if (this.singleSelection != !!val) //false != undefined = true, false != !!undefined = false
-            {
-                this.singleSelection = val;
-            }
-        },
-        /**
-         * Extends the base {@link SelectionModel#select select} by first clearing out the entire
-         * store if `singleSelection` is true and there are items already in the store.
-         * @param {String} key Unique identifier string
-         * @param {Object} data The item being selected
-         * @param tag
-         */
-        select: function(key, data, tag) {
-            if (this.singleSelection)
-            {
-                if (!this.isSelected(key) || (this.count >= 1)) this.clear();
-            }
-
-            this.inherited(arguments);
-        }
-    });
-
     return declare('Sage.Platform.Mobile.List', [View], {
-        /**
+        /** 
          * @property {Object}
          * Creates a setter map to html nodes, namely:
          *
@@ -510,6 +298,8 @@ define('Sage/Platform/Mobile/List', [
          * The default resource predicate for an SData request.
          */
         resourcePredicate: null,
+        store: null,
+        items: {},
         /**
          * @property {Number}
          * The number of items to request per SData payload.
@@ -747,16 +537,20 @@ define('Sage/Platform/Mobile/List', [
          * Extends dijit Widget to destroy the search widget before destroying the view.
          */
         destroy: function() {
-			if (this.searchWidget)
-            {
-				if(!this.searchWidget._destroyed)
+            if (this.searchWidget) {
+                if(!this.searchWidget._destroyed) {
                     this.searchWidget.destroyRecursive();
+                }
 
-				delete this.searchWidget;
-			}
+                delete this.searchWidget;
+            }
             
-			this.inherited(arguments);
-		},
+            delete this.store;
+            this.inherited(arguments);
+        },
+        _getStoreAttr: function() {
+            return this.store || (this.store = this.createStore());
+        },
         /**
          * Sets and returns the toolbar item layout definition, this method should be overriden in the view
          * so that you may define the views toolbar items.
@@ -1135,82 +929,6 @@ define('Sage/Platform/Mobile/List', [
                 });
         },
         /**
-         * Creates SDataResourceCollectionRequest instance and sets a number of known properties.
-         *
-         * List of properties used from `this.property/this.options.property`:
-         *
-         * `pageSize`, `contractName`, `resourceKind`, `resourceProperty`, `resourcePredicate`, `querySelect/select`,
-         * `queryOrderBy/orderBy`, `queryInclude`, `queryWhere/where`, `query`
-         *
-         * The where parts are joined via `AND`.
-         *
-         * The Start Index is set by checking the saved `this.feed` and if its `$startIndex` and `$itemsPerPage` greater
-         * than 0 -- then it adds them together to get the instead. If no feed or not greater than 0 then set the index
-         * to 1.
-         *
-         * @param {object} o Optional request options.
-         * @return {Object} Sage.SData.Client.SDataResourceCollectionRequest instance.
-         */
-        createRequest:function(o) {
-            // todo: should we cache the request? the only thing that needs to change on subsequent requests is the paging.
-
-            var where = [],
-                options = this.options,
-                pageSize = this.pageSize,
-                startIndex = this.feed && this.feed['$startIndex'] > 0 && this.feed['$itemsPerPage'] > 0
-                    ? this.feed['$startIndex'] + this.feed['$itemsPerPage']
-                    : 1;
-
-            var request = new Sage.SData.Client.SDataResourceCollectionRequest(this.getService())
-                .setCount(pageSize)
-                .setStartIndex(startIndex);
-
-            var contractName = this.expandExpression((options && options.contractName) || this.contractName);
-            if (contractName)
-                request.setContractName(contractName);
-
-            var resourceKindExpr = this.expandExpression((options && options.resourceKind) || this.resourceKind);
-            if (resourceKindExpr)
-                request.setResourceKind(resourceKindExpr);
-
-            var resourcePropertyExpr = this.expandExpression((options && options.resourceProperty) || this.resourceProperty);
-            if (resourcePropertyExpr)
-                request
-                    .getUri()
-                    .setPathSegment(Sage.SData.Client.SDataUri.ResourcePropertyIndex, resourcePropertyExpr);
-
-            var resourcePredicateExpr = this.expandExpression((options && options.resourcePredicate) || this.resourcePredicate);
-            if (resourcePredicateExpr)
-                request
-                    .getUri()
-                    .setCollectionPredicate(resourcePredicateExpr);
-
-            var querySelectExpr = this.expandExpression((options && options.select) || this.querySelect);
-            if (querySelectExpr)
-                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Select, querySelectExpr.join(','));
-
-            var queryIncludeExpr = this.expandExpression(this.queryInclude);
-            if (queryIncludeExpr)
-                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Include, queryIncludeExpr.join(','));
-
-            var queryOrderByExpr = this.expandExpression((options && options.orderBy) || this.queryOrderBy);
-            if (queryOrderByExpr)
-                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.OrderBy, queryOrderByExpr);
-
-            var queryWhereExpr = this.expandExpression((options && options.where) || this.queryWhere);
-            if (queryWhereExpr)
-                where.push(queryWhereExpr);
-
-            if (this.query)
-                where.push(this.query);
-
-
-            if (where.length > 0)
-                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Where, where.join(' and '));
-
-            return request;
-        },
-        /**
          * Helper method for list actions. Takes a view id, data point and where format string, sets the nav options
          * `where` to the formatted expression using the data point and shows the given view id with that option.
          * @param {Object} action Action instance, not used.
@@ -1278,63 +996,14 @@ define('Sage/Platform/Mobile/List', [
             }
         },
         /**
-         * Processes the feed result from the SData request and renders out the resource feed entries.
-         *
-         * Saves the feed to `this.feed` and saves each entry to the `this.entries` collection using the entries `$key`
-         * as the key.
-         *
-         * @param {Object} feed The SData result
-         */
-        processFeed: function(feed) {
-            if (!this.feed) this.set('listContent', '');
-
-            this.feed = feed;
-            if (this.feed['$totalResults'] === 0)
-            {
-                this.set('listContent', this.noDataTemplate.apply(this));                
-            }
-            else if (feed['$resources'])
-            {
-                var o = [];
-
-                for (var i = 0; i < feed['$resources'].length; i++)
-                {
-                    var entry = feed['$resources'][i];
-
-                    entry['$descriptor'] = entry['$descriptor'] || feed['$descriptor'];
-
-                    this.entries[entry.$key] = entry;
-
-                    o.push(this.rowTemplate.apply(entry, this));
-                }
-
-                if (o.length > 0)
-                    domConstruct.place(o.join(''), this.contentNode, 'last');
-            }
-
-            // todo: add more robust handling when $totalResults does not exist, i.e., hide element completely
-            if (typeof this.feed['$totalResults'] !== 'undefined')
-            {
-                var remaining = this.feed['$totalResults'] - (this.feed['$startIndex'] + this.feed['$itemsPerPage'] - 1);
-                this.set('remainingContent', string.substitute(this.remainingText, [remaining]));
-            }
-
-            domClass.toggle(this.domNode, 'list-has-more', this.hasMoreData());
-
-            if (this.options.allowEmptySelection)
-                domClass.add(this.domNode, 'list-has-empty-opt');
-
-            this._loadPreviousSelections();
-        },
-        /**
          * Deterimines if there is more data to be shown by inspecting the last feed result.
          * @return {Boolean} True if the feed has more data; False otherwise.
          */
         hasMoreData: function() {
-            if (this.feed && this.feed['$startIndex'] > 0 && this.feed['$itemsPerPage'] > 0 && this.feed['$totalResults'] >= 0) {
-                var start = this.feed['$startIndex'];
-                var count = this.feed['$itemsPerPage'];
-                var total = this.feed['$totalResults'];
+            if (this.items && this.items['$startIndex'] > 0 && this.items['$itemsPerPage'] > 0 && this.items['$totalResults'] >= 0) {
+                var start = this.items['$startIndex'];
+                var count = this.items['$itemsPerPage'];
+                var total = this.items['$totalResults'];
 
                 return (start + count <= total);
             } else {
@@ -1342,9 +1011,87 @@ define('Sage/Platform/Mobile/List', [
             }
         },
         /**
+         * Creates SDataResourceCollectionRequest instance and sets a number of known properties.
+         *
+         * List of properties used from `this.property/this.options.property`:
+         *
+         * `pageSize`, `contractName`, `resourceKind`, `resourceProperty`, `resourcePredicate`, `querySelect/select`,
+         * `queryOrderBy/orderBy`, `queryInclude`, `queryWhere/where`, `query`
+         *
+         * The where parts are joined via `AND`.
+         *
+         * The Start Index is set by checking the saved `this.feed` and if its `$startIndex` and `$itemsPerPage` greater
+         * than 0 -- then it adds them together to get the instead. If no feed or not greater than 0 then set the index
+         * to 1.
+         *
+         * @param {object} o Optional request options.
+         * @return {Object} Sage.SData.Client.SDataResourceCollectionRequest instance.
+         * @deprecated
+         */
+        createRequest:function(o) {
+            // todo: should we cache the request? the only thing that needs to change on subsequent requests is the paging.
+
+            var where = [],
+                options = this.options,
+                pageSize = this.pageSize,
+                startIndex = this.feed && this.feed['$startIndex'] > 0 && this.feed['$itemsPerPage'] > 0
+                    ? this.feed['$startIndex'] + this.feed['$itemsPerPage']
+                    : 1;
+
+            var request = new Sage.SData.Client.SDataResourceCollectionRequest(this.getService())
+                .setCount(pageSize)
+                .setStartIndex(startIndex);
+
+            var contractName = this.expandExpression((options && options.contractName) || this.contractName);
+            if (contractName)
+                request.setContractName(contractName);
+
+            var resourceKindExpr = this.expandExpression((options && options.resourceKind) || this.resourceKind);
+            if (resourceKindExpr)
+                request.setResourceKind(resourceKindExpr);
+
+            var resourcePropertyExpr = this.expandExpression((options && options.resourceProperty) || this.resourceProperty);
+            if (resourcePropertyExpr)
+                request
+                    .getUri()
+                    .setPathSegment(Sage.SData.Client.SDataUri.ResourcePropertyIndex, resourcePropertyExpr);
+
+            var resourcePredicateExpr = this.expandExpression((options && options.resourcePredicate) || this.resourcePredicate);
+            if (resourcePredicateExpr)
+                request
+                    .getUri()
+                    .setCollectionPredicate(resourcePredicateExpr);
+
+            var querySelectExpr = this.expandExpression((options && options.select) || this.querySelect);
+            if (querySelectExpr)
+                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Select, querySelectExpr.join(','));
+
+            var queryIncludeExpr = this.expandExpression(this.queryInclude);
+            if (queryIncludeExpr)
+                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Include, queryIncludeExpr.join(','));
+
+            var queryOrderByExpr = this.expandExpression((options && options.orderBy) || this.queryOrderBy);
+            if (queryOrderByExpr)
+                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.OrderBy, queryOrderByExpr);
+
+            var queryWhereExpr = this.expandExpression((options && options.where) || this.queryWhere);
+            if (queryWhereExpr)
+                where.push(queryWhereExpr);
+
+            if (this.query)
+                where.push(this.query);
+
+
+            if (where.length > 0)
+                request.setQueryArg(Sage.SData.Client.SDataUri.QueryArgNames.Where, where.join(' and '));
+
+            return request;
+        },
+        /**
          * Handler when an error occurs while request data from the SData endpoint.
          * @param {Object} response The response object.
          * @param {Object} o The options that were passed when creating the Ajax request.
+         * @deprecated
          */
         onRequestDataFailure: function(response, o) {
             alert(string.substitute(this.requestErrorText, [response, o]));
@@ -1359,6 +1106,7 @@ define('Sage/Platform/Mobile/List', [
          *
          * @param {Object} response The response object.
          * @param {Object} o The options that were passed when creating the Ajax request.
+         * @deprecated
          */
         onRequestDataAborted: function(response, o) {
             this.options = false; // force a refresh
@@ -1370,6 +1118,7 @@ define('Sage/Platform/Mobile/List', [
         /**
          * Handler when a request to SData is successful
          * @param {Object} feed The SData response
+         * @deprecated
          */
         onRequestDataSuccess: function(feed) {
             this.processFeed(feed);
@@ -1381,16 +1130,176 @@ define('Sage/Platform/Mobile/List', [
          * Initiates the SData request.
          */
         requestData: function() {
+            var store, queryOptions, request;
+
             domClass.add(this.domNode, 'list-loading');
             this.listLoading = true;
 
-            var request = this.createRequest();
-            request.read({
-                success: this.onRequestDataSuccess,
-                failure: this.onRequestDataFailure,
-                aborted: this.onRequestDataAborted,
-                scope: this
-            });
+            store = this.get('store');
+            if (store) {
+                // attempt to use a dojo store
+                queryOptions = {
+                        count: this.pageSize,
+                        start: this.position
+                };
+
+                this._applyStateToQueryOptions(queryOptions);
+
+                var queryExpression = this._buildQueryExpression() || null,
+                    queryResults = store.query(queryExpression, queryOptions);
+
+                Deferred.when(queryResults,
+                    lang.hitch(this, this._onQueryComplete, queryResults),
+                    lang.hitch(this, this._onQueryError, queryOptions)
+                );
+
+                return queryResults;
+            } else {
+                // Use legacy method
+                request = this.createRequest();
+                request.read({
+                    success: this.onRequestDataSuccess,
+                    failure: this.onRequestDataFailure,
+                    aborted: this.onRequestDataAborted,
+                    scope: this
+                });
+            }
+        },
+        _onQueryComplete: function(queryResults, items) {
+            var start = this.position;
+
+            Deferred.when(queryResults.total, lang.hitch(this, this._onQueryTotal));
+
+            /* todo: move to a more appropriate location */
+            if (this.options && this.options.allowEmptySelection) {
+                domClass.add(this.domNode, 'list-has-empty');
+            }
+
+            this._processData(items);
+
+            domClass.remove(this.domNode, 'list-loading');
+
+            /* remove the loading indicator so that it does not get re-shown while requesting more data */
+            if (start === 0) {
+                domConstruct.destroy(this.loadingIndicatorNode);
+            }
+
+            this.onContentChange();
+            connect.publish('/app/toolbar/update', []);
+        },
+        createStore: function () {
+            return null;
+        },
+        onContentChange: function() {
+        },
+        _processItem: function(item) {
+            return item;
+        },
+        _onQueryTotal: function(size) {
+            if (size === 0)
+            {
+                domConstruct.place(this.noDataTemplate.apply(this), this.contentNode, 'only');
+            }
+            else
+            {
+                var remaining = size > -1
+                    ? size - (this.position + this.pageSize)
+                    : -1;
+
+                if (remaining !== -1)
+                    this.set('remainingContent', string.substitute(this.remainingText, [remaining]));
+
+                domClass.toggle(this.domNode, 'list-has-more', (remaining === -1 || remaining > 0));
+
+                this.position = this.position + this.pageSize;
+            }
+        },
+        /**
+         * Processes the feed result from the SData request and renders out the resource feed entries.
+         *
+         * Saves the feed to `this.feed` and saves each entry to the `this.entries` collection using the entries `$key`
+         * as the key.
+         *
+         * @param {Object} feed The SData result
+         * @deprecated
+         */
+        processFeed: function(feed) {
+            var output = [], entry, i;
+            if (!this.feed) {
+                this.set('listContent', '');
+            }
+
+            this.feed = feed;
+
+            if (this.feed['$totalResults'] === 0) {
+                this.set('listContent', this.noDataTemplate.apply(this));                
+            } else if (feed['$resources']) {
+
+                for (i = 0; i < feed['$resources'].length; i++) {
+                    entry = feed['$resources'][i];
+                    entry['$descriptor'] = entry['$descriptor'] || feed['$descriptor'];
+                    this.entries[entry.$key] = entry;
+                    output.push(this.rowTemplate.apply(entry, this));
+                }
+
+                if (output.length > 0) {
+                    domConstruct.place(output.join(''), this.contentNode, 'last');
+                }
+            }
+
+            // todo: add more robust handling when $totalResults does not exist, i.e., hide element completely
+            if (typeof this.feed['$totalResults'] !== 'undefined') {
+                var remaining = this.feed['$totalResults'] - (this.feed['$startIndex'] + this.feed['$itemsPerPage'] - 1);
+                this.set('remainingContent', string.substitute(this.remainingText, [remaining]));
+            }
+
+            domClass.toggle(this.domNode, 'list-has-more', this.hasMoreData());
+
+            if (this.options.allowEmptySelection) {
+                domClass.add(this.domNode, 'list-has-empty-opt');
+            }
+
+            this._loadPreviousSelections();
+        },
+        _processData: function(items) {
+            var store = this.get('store'),
+                count = items.length;
+            if (count > 0) {
+                var output = [];
+
+                for (var i = 0; i < count; i++) {
+                    var item = this._processItem(items[i]);
+                    this.items[store.getIdentity(item)] = item;
+                    output.push(this.rowTemplate.apply(item, this));
+                }
+
+                if (output.length > 0) { 
+                    domConstruct.place(output.join(''), this.contentNode, 'last');
+                }
+            }
+        },
+        _onQueryError: function(queryOptions, error) {
+            if (error.aborted)
+            {
+                this.options = false; // force a refresh
+            }
+            else
+            {
+                alert(string.substitute(this.requestErrorText, [error]));
+            }
+
+            var errorItem = {
+                viewOptions: this.options,
+                serverError: error
+            };
+            ErrorManager.addError(this.requestErrorText, errorItem);
+
+            domClass.remove(this.domNode, 'list-loading');
+        },
+        _buildQueryExpression: function() {
+            return lang.mixin(this.query || {}, this.options && (this.options.query || this.options.where));
+        },
+        _applyStateToQueryOptions: function(queryOptions) {
         },
         /**
          * Handler for the more button. Simply calls {@link #requestData requestData} which already has the info for
@@ -1521,7 +1430,7 @@ define('Sage/Platform/Mobile/List', [
          * Clears the view by:
          *
          *  * clearing the selection model, but without it invoking the event handlers;
-         *  * clears the views data such as `this.entries` and `this.feed`;
+         *  * clears the views data such as `this.entries` and `this.items`;
          *  * clears the search width if passed true; and
          *  * applies the default template.
          *
@@ -1536,8 +1445,9 @@ define('Sage/Platform/Mobile/List', [
             }
 
             this.requestedFirstPage = false;
+            this.items = {};
             this.entries = {};
-            this.feed = false;
+            this.position = 0;
             this.query = false; // todo: rename to searchQuery
 
             if (all !== false && this.searchWidget) this.searchWidget.clear();

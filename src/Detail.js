@@ -29,6 +29,7 @@ define('Sage/Platform/Mobile/Detail', [
     'dojo',
     'dojo/_base/declare',
     'dojo/_base/lang',
+    'dojo/_base/Deferred',
     'dojo/string',
     'dojo/dom',
     'dojo/dom-class',
@@ -41,6 +42,7 @@ define('Sage/Platform/Mobile/Detail', [
     dojo,
     declare,
     lang,
+    Deferred,
     string,
     dom,
     domClass,
@@ -227,6 +229,11 @@ define('Sage/Platform/Mobile/Detail', [
         id: 'generic_detail',
         /**
          * @property {Object}
+         * The dojo store this view will use for data exchange.
+         */
+        store: null,
+        /**
+         * @property {Object}
          * The layout definition that constructs the detail view with sections and rows
          */
         layout: null,
@@ -387,7 +394,7 @@ define('Sage/Platform/Mobile/Detail', [
         navigateToEditView: function(el) {
             var view = App.getView(this.editView);
             if (view)
-                view.show({entry: this.entry});
+                view.show({entry: this.entry, item: this.item});
         },
         /**
          * Navigates to a given view id passing the options retrieved using the slot index to `this._navigationOptions`.
@@ -626,22 +633,8 @@ define('Sage/Platform/Mobile/Detail', [
                 this.processLayout(current, entry);
             }
         },
-        /**
-         * Saves the SData response to `this.entry` and invokes {@link #processLayout processLayout} by passing the customized
-         * layout definition. If no entry is provided, empty the screen.
-         * @param {Object} entry SData response
-         */
-        processEntry: function(entry) {
-            this.entry = entry;
-
-            if (this.entry)
-            {
-                this.processLayout(this._createCustomizedLayout(this.createLayout()), this.entry);
-            }
-            else
-            {
-                this.set('detailContent', '');
-            }
+        _getStoreAttr: function() {
+            return this.store || (this.store = this.createStore());
         },
         /**
          * Handler when an error occurs while request data from the SData endpoint.
@@ -683,19 +676,138 @@ define('Sage/Platform/Mobile/Detail', [
             domClass.remove(this.domNode, 'panel-loading');
         },
         /**
+         * CreateStore is the core of the data handling for Detail Views. By default it is empty but it should return
+         * a dojo store of your choosing. There are {@link _SDataDetailMixin Mixins} available for SData.
+         * @return {*}
+         */
+        createStore: function() {
+            return null;
+        },
+        /**
+         * Required for binding to ScrollContainer which utilizes iScroll that requires to be refreshed when the
+         * content (therefor scrollable area) changes.
+         */
+        onContentChange: function() {
+        },
+        /**
+         * Saves the SData response to `this.entry` and invokes {@link #processLayout processLayout} by passing the customized
+         * layout definition. If no entry is provided, empty the screen.
+         * @param {Object} entry SData response
+         */
+        processEntry: function(entry) {
+            this.entry = entry;
+
+            if (this.entry)
+            {
+                this.processLayout(this._createCustomizedLayout(this.createLayout()), this.entry);
+            }
+            else
+            {
+                this.set('detailContent', '');
+            }
+        },
+        /**
+         * @template
+         * Optional processing of the returned entry before it gets processed into layout.
+         * @param {Object} item Entry from data store
+         * @return {Object} By default does not do any processing
+         */
+        _processItem: function(item) {
+            return item;
+        },
+        /**
+         * Takes the entry from the data store, applies customization, applies any custom item process and then
+         * passes it to process layout.
+         * @param {Object} item Entry from data store
+         */
+        _processData: function(item) {
+            this.item = item;
+
+            if (this.item) {
+                this.processLayout(this._createCustomizedLayout(this.createLayout()), this.item);
+            } else {
+                this.set('detailContent', '');
+            }
+        },
+        _onGetComplete: function(item) {
+            if (item)
+            {
+                this._processData(item);
+            }
+            else
+            {
+                domConstruct.place(this.notAvailableTemplate.apply(this), this.contentNode, 'only');
+            }
+
+            domClass.remove(this.domNode, 'panel-loading');
+
+            /* this must take place when the content is visible */
+            this.onContentChange();
+        },
+        _onGetError: function(getOptions, error) {
+            if (error.aborted)
+            {
+                this.options = false; // force a refresh
+            }
+            else if (error.status == 404)
+            {
+                domConstruct.place(this.notAvailableTemplate.apply(this), this.contentNode, 'only');
+            }
+            else
+            {
+                alert(string.substitute(this.requestErrorText, [error]));
+            }
+
+            var errorItem = {
+                viewOptions: this.options,
+                serverError: error
+            };
+            ErrorManager.addError(this.requestErrorText, errorItem);
+
+            domClass.remove(this.domNode, 'panel-loading');
+        },
+        /**
          * Initiates the SData request.
          */
         requestData: function() {
+            var request, store, getExpression, getResults;
+
             domClass.add(this.domNode, 'panel-loading');
 
-            var request = this.createRequest();
-            if (request)
-                request.read({
-                    success: this.onRequestDataSuccess,
-                    failure: this.onRequestDataFailure,
-                    aborted: this.onRequestDataAborted,
-                    scope: this
-                });
+            store = this.get('store');
+            if (store) {
+                getOptions = {};
+
+                this._applyStateToGetOptions(getOptions);
+
+                getExpression = this._buildGetExpression() || null;
+                getResults = store.get(getExpression, getOptions);
+
+                Deferred.when(getResults,
+                    lang.hitch(this, this._onGetComplete),
+                    lang.hitch(this, this._onGetError, getOptions)
+                );
+
+                return getResults;
+            } else {
+                request = this.createRequest();
+
+                if (request) {
+                    request.read({
+                        success: this.onRequestDataSuccess,
+                        failure: this.onRequestDataFailure,
+                        aborted: this.onRequestDataAborted,
+                        scope: this
+                    });
+                }
+            }
+        },
+        _buildGetExpression: function() {
+            var options = this.options;
+
+            return options && (options.id || options.key);
+        },
+        _applyStateToGetOptions: function(getOptions) {
         },
         /**
          * Determines if the view should be refresh by inspecting and comparing the passed navigation option key with current key.
