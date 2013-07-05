@@ -30,6 +30,7 @@ define('Sage/Platform/Mobile/Application', [
     'dojo/_base/lang',
     'dojo/_base/window',
     'dojo/string',
+    'dojo/router',
     'dojo/has',
     'dojo/_base/sniff',
     'dojo/dom-construct',
@@ -44,6 +45,7 @@ define('Sage/Platform/Mobile/Application', [
     lang,
     win,
     string,
+    router,
     has,
     sniff,
     domConstruct,
@@ -135,6 +137,7 @@ define('Sage/Platform/Mobile/Application', [
         services: null,
         modules: null,
         views: null,
+        router: router,
         /**
          * Toolbar instances by key name
          * @property {Object}
@@ -201,6 +204,9 @@ define('Sage/Platform/Mobile/Application', [
 
             ReUI.init();
         },
+        initRoutes: function() {
+            this.router.startup();
+        },
         /**
          * If caching is enable and App is {@link #isOnline online} the empties the SData cache via {@link #_clearSDataRequestCache _clearSDataRequestCache}.
          */
@@ -266,6 +272,7 @@ define('Sage/Platform/Mobile/Application', [
             this.initToolbars();
             this.initViews();
             this.initReUI();
+            this.initRoutes();
         },
         /**
          * Sets `_started` to true.
@@ -413,6 +420,13 @@ define('Sage/Platform/Mobile/Application', [
          * @param {domNode} domNode Optional. A DOM node to place the view in. 
          */
         registerView: function(view, domNode) {
+            var route;
+            for (route in view.routes) {
+                if (view.routes.hasOwnProperty(route)) {
+                    this.router.register(route, lang.hitch(view, view.routes[route]));
+                }
+            }
+
             this.views[view.id] = view;
 
             if (this._started) {

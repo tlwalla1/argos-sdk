@@ -146,6 +146,19 @@ define('Sage/Platform/Mobile/View', [
         refresh: function() {
         },
         /**
+         * Key/Value pair of route/callback for this view. These are registered with the App.router when the view is registered.
+         * @property {Object}
+         * @see http://dojotoolkit.org/reference-guide/1.9/dojo/router.html#dojo-router
+         */
+        routes: {
+            // Register a generic route for legacy ReUI id's
+            '_:viewId': function(evt) {
+                if (this.id === evt.params.viewId) {
+                    this.show();
+                }
+            }
+        },
+        /**
          * The onBeforeTransitionAway event.
          * @param self
          */
